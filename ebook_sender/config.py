@@ -34,8 +34,6 @@ def load_settings() -> Settings:
         raise RuntimeError(f"Missing required environment variables: {joined}")
 
     client_path = Path(client_path_str)
-    if not client_path.exists():
-        raise RuntimeError(f"stkclient client file not found: {client_path}")
 
     device_serials: Optional[Tuple[str, ...]] = None
     if device_serials_env:

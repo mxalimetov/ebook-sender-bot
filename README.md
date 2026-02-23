@@ -36,6 +36,8 @@ cp .env.example .env
 
 You can also set the variables directly in your shell or hosting provider (Docker, systemd, etc.).
 
+If the file referenced by `STKCLIENT_CLIENT_PATH` does not exist when the bot starts, it will print an OAuth sign-in URL, prompt you for the final redirect URL, and save a fresh client file automatically. When `KINDLE_DEVICE_SERIALS` is empty, the bot enumerates owned Kindle devices and logs their serial numbers so you can copy/paste the ones you care about.
+
 ## Installation
 
 ```bash
@@ -95,6 +97,8 @@ with open("client.json", "w") as fh:
 ```
 
 Copy the generated `client.json` to your bot host and point `STKCLIENT_CLIENT_PATH` to it. You can refresh/replace the file whenever you re-authorize.
+
+> Tip: You can skip these manual steps and simply run the bot once; it will output the sign-in link, ask for the redirect URL, and create the client file in-place if it does not exist.
 
 ## Notes on `stkclient`
 The package is reverse-engineered and has changed APIs over time. The helper in `src/ebook_sender/kindle.py` loads your serialized OAuth2 client, fetches owned devices, and calls `client.send_file(...)`. If your installed version exposes different return types or field names, tweak the `KindleSender` class accordingly.

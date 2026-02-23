@@ -4,7 +4,6 @@ __pycache__/
 *.egg-info/
 .venv/
 .env
-.env.*
 client.json
 .mypy_cache/
 .pytest_cache/
