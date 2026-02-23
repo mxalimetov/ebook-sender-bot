@@ -4,10 +4,14 @@ import asyncio
 import importlib
 import logging
 import sys
+import urllib.error
 from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
+from .metadata import EbookMetadata
+
 LOGGER = logging.getLogger(__name__)
+_SEND_PATCH_APPLIED = False
 
 
 class KindleSender:
@@ -18,6 +22,7 @@ class KindleSender:
         client_path: Path,
         device_serials: Optional[Sequence[str]] = None,
     ) -> None:
+        _ensure_fixed_send_to_kindle()
         self._client_path = client_path
         self._device_serials = tuple(device_serials) if device_serials else None
         self._lock = asyncio.Lock()
@@ -123,19 +128,66 @@ class KindleSender:
 
         return tuple(serials)
 
-    async def send(self, document_path: Path, title: str, format: str) -> None:
+    async def send(self, document_path: Path, metadata: EbookMetadata) -> None:
         async with self._lock:
-            await asyncio.to_thread(self._send_sync, document_path, title, format)
+            await asyncio.to_thread(self._send_sync, document_path, metadata)
 
-    def _send_sync(self, document_path: Path, title: str, format: str) -> None:
+    def _send_sync(self, document_path: Path, metadata: EbookMetadata) -> None:
         LOGGER.info("Sending %s to Kindle devices", document_path.name)
         destinations = list(self._destinations)
         if not destinations:
             raise RuntimeError("No Kindle destinations available for delivery.")
+
+        title = metadata.title or document_path.stem
+        author = ", ".join(metadata.authors) if metadata.authors else "Telegram Bot"
+        fmt = (metadata.format or document_path.suffix.lstrip(".")) or "pdf"
         self._client.send_file(
             document_path,
             destinations,
-            author="Telegram Bot",
+            author=author,
             title=title,
-            format=format,
+            format=fmt,
         )
+
+
+def _ensure_fixed_send_to_kindle() -> None:
+    global _SEND_PATCH_APPLIED
+    if _SEND_PATCH_APPLIED:
+        return
+
+    import stkclient  # type: ignore
+
+    api_module = importlib.import_module("stkclient.api")
+
+    def fixed_send_to_kindle(
+        signer,
+        stk_token,
+        target_device_serial_numbers,
+        *,
+        author,
+        title,
+        format,
+    ):
+        fmt = format or "pdf"
+        body = {
+            "DocumentMetadata": {
+                "author": author,
+                "crc32": 0,
+                "inputFormat": fmt,
+                "title": title,
+            },
+            "archive": True,
+            "deliveryMechanism": "WIFI",
+            "outputFormat": fmt,
+            "stkToken": stk_token,
+            "targetDevices": target_device_serial_numbers,
+        }
+        try:
+            return api_module.SendToKindleResponse.from_dict(
+                api_module._request("/SendToKindle", signer, body)
+            )
+        except urllib.error.HTTPError as exc:  # pragma: no cover - network failure guard
+            raise api_module.APIError(str(exc), api_module._text(exc)) from exc
+
+    api_module.send_to_kindle = fixed_send_to_kindle
+    _SEND_PATCH_APPLIED = True

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import tempfile
@@ -18,6 +19,7 @@ from telegram.ext import (
 
 from .config import Settings, load_settings
 from .kindle import KindleSender
+from .metadata import EbookMetadata, extract_metadata
 
 LOGGER = logging.getLogger(__name__)
 ALLOWED_EXTENSIONS: set[str] = {"pdf", "epub", "mobi", "azw3", "txt"}
@@ -74,8 +76,11 @@ async def document_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     try:
+        metadata = await asyncio.to_thread(extract_metadata, temp_path, extension.upper())
+        await _maybe_show_metadata(message, metadata)
+
         await downloading_msg.edit_text("Uploading to Kindle...")
-        await kindle_sender.send(temp_path, document.file_name or temp_path.name, format=extension)
+        await kindle_sender.send(temp_path, metadata)
     except Exception as exc:  # pragma: no cover - defensive guard
         LOGGER.exception("Failed to send document to Kindle")
         await downloading_msg.edit_text(f"Delivery failed: {exc}")
@@ -123,6 +128,20 @@ async def _download_document(
 
     await telegram_file.download_to_drive(custom_path=temp_path_str)
     return temp_path
+
+
+async def _maybe_show_metadata(message, metadata: EbookMetadata) -> None:
+    if not message:
+        return
+
+    lines: list[str] = []
+    if metadata.title:
+        lines.append(f"Title: {metadata.title}")
+    if metadata.authors:
+        lines.append("Author(s): " + ", ".join(metadata.authors))
+
+    if lines:
+        await message.reply_text("Metadata:\n" + "\n".join(lines))
 
 
 def run() -> None:

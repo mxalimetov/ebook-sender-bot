@@ -4,7 +4,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     UV_SYSTEM_PYTHON=1
 
-RUN pip install --no-cache-dir uv
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends calibre \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv
 
 WORKDIR /app
 

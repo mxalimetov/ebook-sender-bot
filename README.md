@@ -1,10 +1,8 @@
 # Ebook Sender Bot
 
-# TODO
-- document, easify setup (STKCLIENT_CLIENT_PATH, KINDLE_DEVICE_SERIALS)
-- read book meta data using calibre
-- check metada using LLM before sending
-- show sent metadata in bot
+## TODO
+- check metadata using isbnlib and LLM before sending
+- show cover in bot
 - fix shell.nix to do install venv
 
 A small Telegram bot that accepts ebook files and forwards them to your Kindle devices through the unofficial `stkclient` package. The bot runs on Python and `python-telegram-bot` v20, so everything is asynchronous and easy to host on any machine that can reach Telegram and Amazon.
@@ -15,11 +13,15 @@ A small Telegram bot that accepts ebook files and forwards them to your Kindle d
 - Streams uploads to a temporary directory and forwards them to any owned Kindle device using `stkclient`.
 - Guards against unsupported file types and oversized uploads.
 - Structured logging for both Telegram events and Kindle delivery attempts.
+- Shows detected title/author metadata (via Calibre's `ebook-meta`) before each delivery when the CLI is available.
 
 ## Prerequisites
 - Python 3.11+
 - A Telegram bot token from [@BotFather](https://t.me/BotFather).
 - A serialized `stkclient` client (see **Authorizing stkclient** below) with access to the Kindle account you want to use.
+- [Calibre](https://calibre-ebook.com/) CLI tools if you want inline metadata (the bot falls back gracefully when `ebook-meta` is missing).
+
+The provided Docker image and Nix shell both install Calibre so metadata display works out of the box in those environments.
 
 ## Configuration
 All runtime configuration is handled through environment variables. Copy the example file and fill values:
@@ -101,7 +103,7 @@ Copy the generated `client.json` to your bot host and point `STKCLIENT_CLIENT_PA
 > Tip: You can skip these manual steps and simply run the bot once; it will output the sign-in link, ask for the redirect URL, and create the client file in-place if it does not exist.
 
 ## Notes on `stkclient`
-The package is reverse-engineered and has changed APIs over time. The helper in `src/ebook_sender/kindle.py` loads your serialized OAuth2 client, fetches owned devices, and calls `client.send_file(...)`. If your installed version exposes different return types or field names, tweak the `KindleSender` class accordingly.
+The package is reverse-engineered and has changed APIs over time. The helper in `src/ebook_sender/kindle.py` loads your serialized OAuth2 client, patches `send_to_kindle` so `outputFormat` always matches the uploaded file, fetches owned devices, and calls `client.send_file(...)`. If your installed version exposes different return types or field names, tweak the `KindleSender` class accordingly.
 
 ## Development
 - Format/lint however you prefer; the project intentionally avoids locking you into a specific toolchain.

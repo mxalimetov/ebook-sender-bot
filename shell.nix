@@ -7,10 +7,11 @@ pkgs.mkShell {
     pkg-config
     openssl
     libffi
+    calibre
   ];
 
   shellHook = ''
     export UV_PYTHON=python3
-    echo "Virtual env not required; use 'uv pip install -r requirements.txt' inside this shell."
+    echo "Calibre CLI (ebook-meta) available. Virtual env not required; use 'uv pip install -r requirements.txt' inside this shell."
   '';
 }
