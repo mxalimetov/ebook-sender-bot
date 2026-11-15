@@ -151,7 +151,7 @@ def run() -> None:
     )
     settings = load_settings()
     application = create_application(settings)
-    application.run_polling(drop_pending_updates=True)
+    application.run_polling(drop_pending_updates=False)
 
 
 if __name__ == "__main__":

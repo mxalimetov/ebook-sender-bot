@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 import importlib
+import json
 import logging
 import sys
 import urllib.error
+import urllib.request
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence, Tuple
 
 from .metadata import EbookMetadata
 
@@ -159,35 +163,35 @@ def _ensure_fixed_send_to_kindle() -> None:
 
     api_module = importlib.import_module("stkclient.api")
 
-    def fixed_send_to_kindle(
-        signer,
-        stk_token,
-        target_device_serial_numbers,
-        *,
-        author,
-        title,
-        format,
-    ):
-        fmt = format or "pdf"
-        body = {
-            "DocumentMetadata": {
-                "author": author,
-                "crc32": 0,
-                "inputFormat": fmt,
-                "title": title,
+    def _patched_request(path, signer, body):
+        data = json.dumps(
+            {
+                "clientInfo": api_module.DEFAULT_CLIENT_INFO,
+                **body,
             },
-            "archive": True,
-            "deliveryMechanism": "WIFI",
-            "outputFormat": fmt,
-            "stkToken": stk_token,
-            "targetDevices": target_device_serial_numbers,
-        }
-        try:
-            return api_module.SendToKindleResponse.from_dict(
-                api_module._request("/SendToKindle", signer, body)
-            )
-        except urllib.error.HTTPError as exc:  # pragma: no cover - network failure guard
-            raise api_module.APIError(str(exc), api_module._text(exc)) from exc
+            indent=4,
+        )
+        req = urllib.request.Request(
+            url="https://kd.amazon.com" + path,
+            data=data.encode("utf-8"),
+            headers={
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip, deflate",
+                "Content-Type": "application/json",
+                "X-ADP-Request-Digest": signer.digest_header_for_request("POST", path, data),
+                "X-ADP-Authentication-Token": signer.adp_token,
+                "Accept-Language": "en-US,*",
+                "User-Agent": "Mozilla/5.0",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req) as r:
+            raw = r.read()
+            encoding = r.headers.get("Content-Encoding", "")
+            if encoding == "gzip":
+                raw = gzip.decompress(raw)
+            val: Mapping[str, Any] = json.loads(raw)
+            return val
 
-    api_module.send_to_kindle = fixed_send_to_kindle
+    api_module._request = _patched_request
     _SEND_PATCH_APPLIED = True
